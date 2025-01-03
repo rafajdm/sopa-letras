@@ -1,100 +1,48 @@
+from word_generator import get_related_words as get_random_words
+from word_search_generator import generate_word_search
+from pdf_generator import create_pdf
 import random
-from fpdf import FPDF
+import unicodedata
 
-# Conjunto de palabras
-WORDS_POOL = [
-    "MONTANA", "OCEANO", "VALLE", "FULGOR", "HORIZONTE",
-    "MIRADOR", "AURORA", "LUZ", "ESTRELLA", "GALAXIA",
-    "NEBULOSA", "ESPEJISMO", "CASCADA", "CENIZAS", "RAFAGA",
-    "CRISTAL", "DIAMANTE", "ESCARCHA", "SELVATICO", "ABISMO"
-]
-
-def generate_word_search(words, size=20):
-    grid = [[' ' for _ in range(size)] for _ in range(size)]
-    directions = [(0, 1), (1, 0), (1, 1), (-1, 1)]
-    
-    for word in words:
-        placed = False
-        while not placed:
-            direction = random.choice(directions)
-            row = random.randint(0, size - 1)
-            col = random.randint(0, size - 1)
-            if can_place_word(grid, word, row, col, direction, size):
-                place_word(grid, word, row, col, direction)
-                placed = True
-    
-    fill_empty_spaces(grid, size)
-    return grid
-
-def can_place_word(grid, word, row, col, direction, size):
-    for i in range(len(word)):
-        new_row = row + i * direction[0]
-        new_col = col + i * direction[1]
-        if new_row < 0 or new_row >= size or new_col < 0 or new_col >= size or grid[new_row][new_col] != ' ':
-            return False
-    return True
-
-def place_word(grid, word, row, col, direction):
-    for i in range(len(word)):
-        new_row = row + i * direction[0]
-        new_col = col + i * direction[1]
-        grid[new_row][new_col] = word[i]
-
-def fill_empty_spaces(grid, size):
-    letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-    for row in range(size):
-        for col in range(size):
-            if grid[row][col] == ' ':
-                grid[row][col] = random.choice(letters)
-
-def create_pdf(puzzles, words):
-    pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.set_font("Arial", size=12)
-    
-    cell_size = 8  # Tamaño de cada celda en el grid
-    page_width = 210  # Ancho de la página A4 en mm
-    grid_size = 20 * cell_size  # Tamaño total del grid
-    margin = (page_width - grid_size) / 2  # Calcular el margen para centrar el grid
-    
-    for puzzle in puzzles:
-        pdf.add_page()
-        start_x = margin
-        start_y = margin
-        
-        # Dibujar los bordes exteriores del grid
-        pdf.line(start_x, start_y, start_x + 20 * cell_size, start_y)  # Borde superior
-        pdf.line(start_x, start_y + 20 * cell_size, start_x + 20 * cell_size, start_y + 20 * cell_size)  # Borde inferior
-        pdf.line(start_x, start_y, start_x, start_y + 20 * cell_size)  # Borde izquierdo
-        pdf.line(start_x + 20 * cell_size, start_y, start_x + 20 * cell_size, start_y + 20 * cell_size)  # Borde derecho
-        
-        # Colocar las letras en el grid
-        for row in range(20):
-            for col in range(20):
-                pdf.text(start_x + col * cell_size + 2, start_y + row * cell_size + 6, puzzle[row][col])
-        
-        pdf.ln(10)
-        
-        # Dibujar la tabla de palabras
-        table_start_y = start_y + 20 * cell_size + 20  # Posición Y después del grid con espacio adicional
-        pdf.set_xy(start_x, table_start_y)
-        
-        words_per_column = len(words) // 4
-        for i in range(words_per_column):
-            pdf.set_x(start_x)  # Reiniciar la posición X al inicio de cada fila
-            for j in range(4):
-                word_index = i + j * words_per_column
-                if word_index < len(words):
-                    pdf.cell(40, 10, words[word_index], 0, 0, 'L')
-            pdf.ln(10)
-    
-    pdf.output("sopas_de_letras.pdf")
+def normalize_word(word):
+    # Eliminar acentos y convertir a mayúsculas
+    normalized_word = unicodedata.normalize('NFKD', word).encode('ASCII', 'ignore').decode('ASCII')
+    # Reemplazar ñ por n
+    normalized_word = normalized_word.replace('ñ', 'n').replace('Ñ', 'N')
+    return normalized_word.upper()
 
 def main():
-    num_puzzles = 7
+    num_prompts = 5
     size = 20
-    puzzles = [generate_word_search(WORDS_POOL, size) for _ in range(num_puzzles)]
-    create_pdf(puzzles, WORDS_POOL)
+    words_to_search_count = 20  # Número de palabras principales que se buscarán
+    puzzles = []
+    words_list = []
+
+    for _ in range(num_prompts):
+        # Obtener palabras desde el word_generator.py
+        all_words = get_random_words()  # Esto devuelve entre 20 y 30 palabras
+
+        # Normalizar las palabras
+        all_words = [normalize_word(word) for word in all_words]
+
+        # Validar que se obtuvieron suficientes palabras
+        if len(all_words) < words_to_search_count:
+            words_to_search_count = len(all_words)  # Ajustar el número de palabras a buscar si hay menos de 20
+
+        # Dividir las palabras en dos grupos
+        words_to_search = all_words[:words_to_search_count]  # Primeras palabras para buscar
+        additional_words = all_words[words_to_search_count:]  # Resto como palabras adicionales
+
+        # Combinar las palabras para el puzzle
+        all_words_in_grid = words_to_search + additional_words
+
+        # Generar el puzzle
+        puzzle = generate_word_search(all_words_in_grid, size)
+        puzzles.append(puzzle)
+        words_list.append(words_to_search)
+
+    # Crear el PDF con las sopas de letras generadas
+    create_pdf(puzzles, words_list)
 
 if __name__ == "__main__":
     main()
